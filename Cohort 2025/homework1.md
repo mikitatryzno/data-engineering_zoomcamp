@@ -7,15 +7,41 @@ Docker and SQL
 
 Run docker with the `python:3.12.8` image in an interactive mode, use the entrypoint `bash`. What's the version of `pip` in the image?
 
-- 24.3.1
-- 24.2.1
-- 23.3.1
-- 23.2.1
+## Solution Steps
 
-## Solution Steps TBA
+Modify the Dockerfile with the following code
+```bash
+FROM python:3.12.8
 
-## Answer TBA
+RUN pip install pandas
 
+ENTRYPOINT ["bash"]
+```
+
+Run the following commands in VS Code Terminal with bash selected
+
+```bash
+$ docker build -t test:pandas . 
+$ docker run -it test:pandas
+```
+
+When running the created Container we will see the following
+
+```bash
+root@a29cada48356:/# python
+Python 3.12.8 (main, Jan 14 2025, 05:32:36) [GCC 12.2.0] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+>>> import pip
+>>> pip.__version__
+'24.3.1'
+>>> 
+root@a29cada48356:/# exit
+exit
+```
+
+## Answer
+
+**24.3.1**
 
 ## Question 2. Understanding Docker networking and docker-compose
 
@@ -53,17 +79,17 @@ volumes:
     name: vol-pgadmin_data
 ```
 
-- postgres:5433
-- localhost:5432
-- db:5433
-- postgres:5432
-- db:5432
-
 If there are more than one answers, select only one of them
 
-## Solution Steps TBA
+## Solution Steps
 
-## Answer TBA
+Since pgAdmin needs to connect to PostgreSQL database and both are defined within the same Docker Compose file, pgAdmin can use **db** as the host name to connect to the PostgreSQL.
+
+pgAdmin should use port **5432**, which is the internal port that PostgreSQL listens on within container.
+
+## Answer
+
+**db:5432**
 
 
 ##  Prepare Postgres
@@ -83,9 +109,6 @@ wget https://github.com/DataTalksClub/nyc-tlc-data/releases/download/misc/taxi_z
 
 Download this data and put it into Postgres.
 
-You can use the code from the course. It's up to you whether
-you want to use Jupyter or a python script.
-
 ## Question 3. Trip Segmentation Count
 
 During the period of October 1st 2019 (inclusive) and November 1st 2019 (exclusive), how many trips, **respectively**, happened:
@@ -95,17 +118,34 @@ During the period of October 1st 2019 (inclusive) and November 1st 2019 (exclusi
 4. In between 7 (exclusive) and 10 miles (inclusive),
 5. Over 10 miles 
 
-Answers:
+## Solution Steps
 
-- 104,802;  197,670;  110,612;  27,831;  35,281
-- 104,802;  198,924;  109,603;  27,678;  35,189
-- 104,793;  201,407;  110,612;  27,831;  35,281
-- 104,793;  202,661;  109,603;  27,678;  35,189
-- 104,838;  199,013;  109,645;  27,688;  35,202
+We need run the following sql script
 
-## Solution Steps TBA
+```sql
+SELECT 
+  SUM(CASE WHEN trip_distance <= 1 THEN 1 ELSE 0 END) AS "Up to 1 mile",
+  SUM(CASE WHEN trip_distance > 1 AND trip_distance <= 3 THEN 1 ELSE 0 END) AS "Between 1 and 3 miles",
+  SUM(CASE WHEN trip_distance > 3 AND trip_distance <= 7 THEN 1 ELSE 0 END) AS "Between 3 and 7 miles",
+  SUM(CASE WHEN trip_distance > 7 AND trip_distance <= 10 THEN 1 ELSE 0 END) AS "Between 7 and 10 miles",
+  SUM(CASE WHEN trip_distance > 10 THEN 1 ELSE 0 END) AS "Over 10 miles"
+FROM "green_tripdata_201910"
+WHERE lpep_pickup_datetime >= '2019-10-01' AND lpep_pickup_datetime < '2019-11-01';
+```
 
-## Answer TBA
+## Answer
+
+I am getting the following answers
+
+"Up to 1 mile" - 104830
+"Between 1 and 3 miles" - 198995
+"Between 3 and 7 miles" - 109642
+"Between 7 and 10 miles" - 27686	
+"Over 10 miles" - 35201
+
+These results are closer to those ones
+
+**104,838;  199,013;  109,645;  27,688;  35,202**
 
 
 ## Question 4. Longest trip for each day
@@ -115,14 +155,25 @@ Use the pick up time for your calculations.
 
 Tip: For every day, we only care about one single trip with the longest distance. 
 
-- 2019-10-11
-- 2019-10-24
-- 2019-10-26
-- 2019-10-31
+## Solution Steps
 
-## Solution Steps TBA
+We need run the following sql script
 
-## Answer TBA
+```sql
+SELECT lpep_pickup_datetime::date AS pickup_date
+FROM (
+  SELECT lpep_pickup_datetime, trip_distance,
+         ROW_NUMBER() OVER (PARTITION BY lpep_pickup_datetime::date ORDER BY trip_distance DESC) AS row_num
+  FROM green_tripdata_201910
+) AS subquery
+WHERE row_num = 1
+ORDER BY trip_distance DESC
+LIMIT 1;
+```
+
+## Answer
+
+**2019-10-31**
 
 
 ## Question 5. Three biggest pickup zones
@@ -132,14 +183,28 @@ Which were the top pickup locations with over 13,000 in
 
 Consider only `lpep_pickup_datetime` when filtering by date.
  
-- East Harlem North, East Harlem South, Morningside Heights
-- East Harlem North, Morningside Heights
-- Morningside Heights, Astoria Park, East Harlem South
-- Bedford, East Harlem North, Astoria Park
+## Solution Steps
 
-## Solution Steps TBA
+We need run the following sql script
 
-## Answer TBA
+```sql
+SELECT z."Zone", SUM(gtd.total_amount) AS total_amount
+FROM green_tripdata_201910 gtd
+JOIN zones z ON gtd."PULocationID" = z."LocationID"
+WHERE gtd.lpep_pickup_datetime::date = '2019-10-18'
+GROUP BY z."Zone"
+HAVING SUM(gtd.total_amount) > 13000
+ORDER BY total_amount DESC
+LIMIT 3;
+```
+
+## Answer
+
+"East Harlem North" - 18686.68000000009
+"East Harlem South" - 16797.260000000075
+"Morningside Heights" - 13029.79000000003
+
+**East Harlem North, East Harlem South, Morningside Heights**
 
 
 ## Question 6. Largest tip
@@ -152,26 +217,27 @@ Note: it's `tip` , not `trip`
 
 We need the name of the zone, not the ID.
 
-- Yorkville West
-- JFK Airport
-- East Harlem North
-- East Harlem South
+## Solution Steps
 
+We need run the following sql script
 
-## Solution Steps TBA
+```sql
+SELECT z2."Zone" AS dropoff_zone, 
+MAX(gtd.tip_amount) AS largest_tip
+FROM green_tripdata_201910 gtd
+JOIN zones z1 ON gtd."PULocationID" = z1."LocationID"
+JOIN zones z2 ON gtd."DOLocationID" = z2."LocationID"
+WHERE z1."Zone" = 'East Harlem North' AND gtd.lpep_pickup_datetime::date >= '2019-10-01' AND gtd.lpep_pickup_datetime::date < '2019-11-01'
+GROUP BY z2."Zone"
+ORDER BY "largest_tip" DESC
+LIMIT 1;
+```
 
-## Answer TBA
+## Answer
 
+"JFK Airport" - 87.3
 
-## Terraform
-
-In this section homework we'll prepare the environment by creating resources in GCP with Terraform.
-
-In your VM on GCP/Laptop/GitHub Codespace install Terraform. 
-Copy the files from the course repo
-[here](../../../01-docker-terraform/1_terraform_gcp/terraform) to your VM/Laptop/GitHub Codespace.
-
-Modify the files as necessary to create a GCP Bucket and Big Query Dataset.
+**JFK Airport**
 
 
 ## Question 7. Terraform Workflow
@@ -181,18 +247,16 @@ Which of the following sequences, **respectively**, describes the workflow for:
 2. Generating proposed changes and auto-executing the plan
 3. Remove all resources managed by terraform`
 
-Answers:
-- terraform import, terraform apply -y, terraform destroy
-- teraform init, terraform plan -auto-apply, terraform rm
-- terraform init, terraform run -auto-approve, terraform destroy
-- terraform init, terraform apply -auto-approve, terraform destroy
-- terraform import, terraform apply -y, terraform rm
 
-## Solution Steps TBA
+## Solution Steps
 
-## Answer TBA
+`terraform init` is used to initialize a working directory containing terraform configuration, downloads necessary provider plugins, and sets up the backend configation.
 
+`terraform apply -auto-approve` is used to apply the changes required to reach the desired state of the configuration, or the pre-determined set of actions generated by Terraform plan. The `auto-approve` flag skips interactive approval of plan before applying.
 
-## Submitting the solutions
+`terraform destroy` is used to destroy the Terraform-managed infrastructure. It terminates resources managed by Terraform project.
 
-* Form for submitting: https://courses.datatalks.club/de-zoomcamp-2025/homework/hw1
+## Answer
+
+**terraform init, terraform apply -auto-approve, terraform destroy**
+
