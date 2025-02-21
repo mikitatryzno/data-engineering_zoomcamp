@@ -21,7 +21,7 @@ select
     affiliated_base_number
 
 from tripdata
---where rn = 1
+where rn = 1
 
 -- dbt build --select <model.sql> --vars '{'is_test_run: false}'
 {% if var("is_test_run", default=true) %} limit 100 {% endif %}

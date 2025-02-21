@@ -14,17 +14,10 @@ yellow_tripdata as (
         'Yellow' as service_type
     from {{ ref('stg_yellow_tripdata') }}
 ),
-with fhv_tripdata as (
-    select *, 
-    'FHV' as service_type 
-    from {{ ref('stg_fhv_tripdata') }}
-), 
 trips_unioned as (
     select * from green_tripdata
     union all 
     select * from yellow_tripdata
-    union all 
-    select * from fhv_tripdata
 ), 
 dim_zones as (
     select * from {{ ref('dim_zones') }}
