@@ -99,11 +99,10 @@ Considering the data lineage in question **and** that taxi_zone_lookup is the **
 
 Select the option that does **NOT** apply for materializing `fct_taxi_monthly_zone_revenue`:
 
-- `dbt run`
-- `dbt run --select +models/core/dim_taxi_trips.sql+ --target prod`
-- `dbt run --select +models/core/fct_taxi_monthly_zone_revenue.sql`
-- `dbt run --select +models/core/`
-- `dbt run --select models/staging/+`
+The correct answer is: **`dbt run --select models/staging/+`**
+
+This is because while it runs the staging models and their downstream dependencies, it doesn't include the seed file (taxi_zone_lookup) which is needed for dim_zone_lookup, which in turn is needed for the final materialization.
+
 
 
 ### Question 4: dbt Macros and Jinja
@@ -165,17 +164,6 @@ Let's analyze why:
    - If that's not set, it falls back to `DBT_BIGQUERY_TARGET_DATASET`
 
 Note: The statement about "staging" is redundant with the one about "stg" as the macro treats all non-'core' values the same way in the else clause.
-
-
-## Serious SQL
-
-Alright, in module 1, you had a SQL refresher, so now let's build on top of that with some serious SQL.
-
-These are not meant to be easy - but they'll boost your SQL and Analytics skills to the next level.  
-So, without any further do, let's get started...
-
-You might want to add some new dimensions `year` (e.g.: 2019, 2020), `quarter` (1, 2, 3, 4), `year_quarter` (e.g.: `2019/Q1`, `2019-Q2`), and `month` (e.g.: 1, 2, ..., 12), **extracted from pickup_datetime**, to your `fct_taxi_trips` OR `dim_taxi_trips.sql` models to facilitate filtering your queries
-
 
 ### Question 5: Taxi Quarterly Revenue Growth
 
