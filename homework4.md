@@ -173,13 +173,111 @@ Note: The statement about "staging" is redundant with the one about "stg" as the
   * e.g.: In 2020/Q1, Green Taxi had -12.34% revenue growth compared to 2019/Q1
   * e.g.: In 2020/Q4, Yellow Taxi had +34.56% revenue growth compared to 2019/Q4
 
-Considering the YoY Growth in 2020, which were the yearly quarters with the best (or less worse) and worst results for green, and yellow
+Considering the YoY Growth in 2020, which were the yearly quarters with the best (or less worse) and worst results for green, and yellow.
 
-- green: {best: 2020/Q2, worst: 2020/Q1}, yellow: {best: 2020/Q2, worst: 2020/Q1}
-- green: {best: 2020/Q2, worst: 2020/Q1}, yellow: {best: 2020/Q3, worst: 2020/Q4}
-- green: {best: 2020/Q1, worst: 2020/Q2}, yellow: {best: 2020/Q2, worst: 2020/Q1}
-- green: {best: 2020/Q1, worst: 2020/Q2}, yellow: {best: 2020/Q1, worst: 2020/Q2}
-- green: {best: 2020/Q1, worst: 2020/Q2}, yellow: {best: 2020/Q3, worst: 2020/Q4}
+In order to answer this question we need to modify `fact_trips.sql` model and create new one `fct_taxi_trips_quarterly_revenue.sql`.
+
+```sql
+{{
+    config(
+        materialized='table'
+    )
+}}
+
+with green_tripdata as (
+    select *,
+    'Green' as service_type
+    from {{ ref('stg_green_tripdata') }}
+),
+yellow_tripdata as (
+    select *,
+    'Yellow' as service_type
+    from {{ ref('stg_yellow_tripdata') }}
+),
+trips_unioned as (
+    select * from green_tripdata
+    union all
+    select * from yellow_tripdata
+),
+dim_zones as (
+    select * from {{ ref('dim_zones') }}
+    where borough != 'Unknown'
+),
+trips AS (
+    SELECT trips_unioned.tripid, 
+    trips_unioned.vendorid, 
+    trips_unioned.service_type,
+    trips_unioned.ratecodeid, 
+    trips_unioned.pickup_locationid, 
+    pickup_zone.borough as pickup_borough, 
+    pickup_zone.zone as pickup_zone, 
+    trips_unioned.dropoff_locationid,
+    dropoff_zone.borough as dropoff_borough, 
+    dropoff_zone.zone as dropoff_zone,  
+    trips_unioned.pickup_datetime, 
+    trips_unioned.dropoff_datetime, 
+    trips_unioned.store_and_fwd_flag, 
+    trips_unioned.passenger_count, 
+    trips_unioned.trip_distance, 
+    trips_unioned.trip_type, 
+    trips_unioned.fare_amount, 
+    trips_unioned.extra, 
+    trips_unioned.mta_tax, 
+    trips_unioned.tip_amount, 
+    trips_unioned.tolls_amount, 
+    trips_unioned.ehail_fee, 
+    trips_unioned.improvement_surcharge, 
+    trips_unioned.total_amount, 
+    trips_unioned.payment_type, 
+    trips_unioned.payment_type_description,
+    EXTRACT(YEAR FROM trips_unioned.pickup_datetime) AS pickup_year,
+    EXTRACT(MONTH FROM trips_unioned.pickup_datetime) AS pickup_month,
+    EXTRACT(QUARTER FROM trips_unioned.pickup_datetime) AS pickup_quarter
+from trips_unioned
+inner join dim_zones as pickup_zone
+on trips_unioned.pickup_locationid = pickup_zone.locationid
+inner join dim_zones as dropoff_zone
+on trips_unioned.dropoff_locationid = dropoff_zone.locationid
+)
+
+SELECT trips.*,
+    CONCAT(CAST(pickup_year AS STRING), '/', CAST(pickup_quarter AS STRING)) AS year_quarter
+    from trips
+```
+
+
+```sql
+{{
+    config(
+        materialized='table'
+    )
+}}
+
+WITH quarterly_revenue AS (
+    SELECT pickup_year,
+            pickup_quarter,
+            service_type,
+            SUM(total_amount) as quarterly_revenue
+    FROM {{ ref('fact_trips') }}
+    WHERE pickup_year IN (2019,2020)
+    GROUP BY pickup_year,pickup_quarter,service_type
+)
+
+SELECT 
+    qr.pickup_quarter,
+    qr.service_type,
+    qr.quarterly_revenue,
+    qr_prev_year.quarterly_revenue AS previous_year_revenue,
+    (qr.quarterly_revenue / qr_prev_year.quarterly_revenue) * 100 AS YOY_Growth
+FROM quarterly_revenue qr
+INNER JOIN quarterly_revenue qr_prev_year
+    ON qr.service_type = qr_prev_year.service_type
+    AND qr.pickup_quarter = qr_prev_year.pickup_quarter
+    AND qr.pickup_year = qr_prev_year.pickup_year + 1
+ORDER BY YOY_Growth DESC
+```
+
+The correct asnwer is **green: {best: 2020/Q1, worst: 2020/Q2}, yellow: {best: 2020/Q1, worst: 2020/Q2}**
 
 
 ### Question 6: P97/P95/P90 Taxi Monthly Fare
