@@ -27,6 +27,8 @@ select *
 from {{ source('raw_nyc_tripdata', 'ext_green_taxi' ) }}
 ```
 
+## Answer
+
 The correct answer is:
 
 ```sql
@@ -70,6 +72,8 @@ where pickup_datetime >= CURRENT_DATE - INTERVAL '30' DAY
 
 What would you change to accomplish that in a such way that command line arguments takes precedence over ENV_VARs, which takes precedence over DEFAULT value?
 
+## Answer
+
 The correct answer is:
 ```sql
 Update the WHERE clause to pickup_datetime >= CURRENT_DATE - INTERVAL '{{ var("days_back", env_var("DAYS_BACK", "30")) }}' DAY
@@ -97,7 +101,9 @@ So the precedence works like this:
 
 Considering the data lineage in question **and** that taxi_zone_lookup is the **only** materialization build (from a .csv seed file):
 
-Select the option that does **NOT** apply for materializing `fct_taxi_monthly_zone_revenue`:
+Select the option that does **NOT** apply for materializing `fct_taxi_monthly_zone_revenue`.
+
+## Answer
 
 The correct answer is: **`dbt run --select models/staging/+`**
 
@@ -137,6 +143,8 @@ And use on your staging, dim_ and fact_ models as:
 
 That all being said, regarding macro above, **select all statements that are true to the models using it**.
 
+## Answer
+
 The correct statements are:
 
 1. **"Setting a value for `DBT_BIGQUERY_TARGET_DATASET` env var is mandatory, or it'll fail to compile"**
@@ -174,6 +182,8 @@ Note: The statement about "staging" is redundant with the one about "stg" as the
   * e.g.: In 2020/Q4, Yellow Taxi had +34.56% revenue growth compared to 2019/Q4
 
 Considering the YoY Growth in 2020, which were the yearly quarters with the best (or less worse) and worst results for green, and yellow.
+
+## Answer
 
 In order to answer this question we need to modify `fact_trips.sql` model and create new one `fct_taxi_trips_quarterly_revenue.sql`.
 
@@ -288,11 +298,52 @@ The correct asnwer is **green: {best: 2020/Q1, worst: 2020/Q2}, yellow: {best: 2
 
 Now, what are the values of `p97`, `p95`, `p90` for Green Taxi and Yellow Taxi, in April 2020?
 
-- green: {p97: 55.0, p95: 45.0, p90: 26.5}, yellow: {p97: 52.0, p95: 37.0, p90: 25.5}
-- green: {p97: 55.0, p95: 45.0, p90: 26.5}, yellow: {p97: 31.5, p95: 25.5, p90: 19.0}
-- green: {p97: 40.0, p95: 33.0, p90: 24.5}, yellow: {p97: 52.0, p95: 37.0, p90: 25.5}
-- green: {p97: 40.0, p95: 33.0, p90: 24.5}, yellow: {p97: 31.5, p95: 25.5, p90: 19.0}
-- green: {p97: 55.0, p95: 45.0, p90: 26.5}, yellow: {p97: 52.0, p95: 25.5, p90: 19.0}
+## Answer 
+`fct_taxi_trips_monthly_fare_p95.sql` model looks like this
+
+```sql
+{{
+    config(
+        materialized='table'
+    )
+}}
+
+WITH filtered_trips AS (
+    SELECT 
+        pickup_year,
+        pickup_month,
+        service_type,
+        fare_amount
+    FROM {{ ref('fact_trips') }}
+    WHERE 
+        fare_amount > 0 
+        AND trip_distance > 0 
+        AND LOWER(payment_type_description) IN ('cash', 'credit card')
+        AND pickup_year = 2020
+        AND pickup_month = 4
+),
+
+percentiles AS (
+    SELECT DISTINCT
+        pickup_year,
+        pickup_month,
+        service_type,
+        PERCENTILE_CONT(fare_amount, 0.97) OVER (
+            PARTITION BY service_type, pickup_year, pickup_month
+        ) AS p97,
+        PERCENTILE_CONT(fare_amount, 0.95) OVER (
+            PARTITION BY service_type, pickup_year, pickup_month
+        ) AS p95,
+        PERCENTILE_CONT(fare_amount, 0.90) OVER (
+            PARTITION BY service_type, pickup_year, pickup_month
+        ) AS p90
+    FROM filtered_trips
+)
+
+SELECT * FROM percentiles
+```
+
+The correct answer is  **green: {p97: 55.0, p95: 45.0, p90: 26.5}, yellow: {p97: 31.5, p95: 25.5, p90: 19.0}**
 
 
 ### Question 7: Top #Nth longest P90 travel time Location for FHV
