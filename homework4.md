@@ -350,7 +350,7 @@ The correct answer is  **green: {p97: 55.0, p95: 45.0, p90: 26.5}, yellow: {p97:
 
 Prerequisites:
 * Create a staging model for FHV Data (2019), and **DO NOT** add a deduplication step, just filter out the entries where `where dispatching_base_num is not null`
-* Create a core model for FHV Data (`dim_fhv_trips.sql`) joining with `dim_zones`. Similar to what has been done [here](../../../04-analytics-engineering/taxi_rides_ny/models/core/fact_trips.sql)
+* Create a core model for FHV Data (`dim_fhv_trips.sql`) joining with `dim_zones`.
 * Add some new dimensions `year` (e.g.: 2019) and `month` (e.g.: 1, 2, ..., 12), based on `pickup_datetime`, to the core model to facilitate filtering for your queries
 
 Now...
@@ -360,8 +360,105 @@ Now...
 
 For the Trips that **respectively** started from `Newark Airport`, `SoHo`, and `Yorkville East`, in November 2019, what are **dropoff_zones** with the 2nd longest p90 trip_duration ?
 
-- LaGuardia Airport, Chinatown, Garment District
-- LaGuardia Airport, Park Slope, Clinton East
-- LaGuardia Airport, Saint Albans, Howard Beach
-- LaGuardia Airport, Rosedale, Bath Beach
-- LaGuardia Airport, Yorkville East, Greenpoint
+## Answer
+
+Below are the models that I added
+
+`stg_fhv_tripdata.sql`
+
+```sql
+{{
+    config(
+        materialized='view'
+    )
+}}
+
+with 
+source as (
+    select * from {{ source("staging", "fhv_taxi") }}
+    WHERE dispatching_base_num is not null
+)
+
+select
+    dispatching_base_num,
+    pickup_datetime,
+    dropoff_datetime,
+    pulocationid,
+    dolocationid,
+    sr_flag,
+    affiliated_base_number
+
+from source
+```
+
+`dim_fhv_trips.sql`
+
+```sql
+{{
+    config(
+        materialized='table'
+    )
+}}
+
+
+WITH
+dim_zones as (
+    select * from {{ ref('dim_zones') }}
+    where borough != 'Unknown'
+)
+
+SELECT dispatching_base_num,
+    pickup_datetime,
+    dropoff_datetime,
+    pulocationid,
+    pickup_zone.borough as pickup_borough, 
+    pickup_zone.zone as pickup_zone, 
+    dolocationid,
+    dropoff_zone.borough as dropoff_borough, 
+    dropoff_zone.zone as dropoff_zone,  
+    sr_flag,
+    affiliated_base_number,
+    EXTRACT(YEAR FROM pickup_datetime) AS pickup_year,
+    EXTRACT(MONTH FROM pickup_datetime) AS pickup_month
+from {{ ref('stg_fhv_tripdata') }} as fhv
+inner join dim_zones as pickup_zone
+on fhv.pulocationid = pickup_zone.locationid
+inner join dim_zones as dropoff_zone
+on fhv.dolocationid = dropoff_zone.locationid
+```
+
+
+`fct_fhv_monthly_zone_traveltime_p90.sql`
+
+```sql
+{{
+    config(
+        materialized='table'
+    )
+}}
+
+WITH trip_durations AS(
+    SELECT 
+        pickup_zone, 
+        dropoff_zone,
+        TIMESTAMP_DIFF(dropoff_datetime, pickup_datetime, SECOND) AS trip_duration,
+        PERCENTILE_CONT(TIMESTAMP_DIFF(dropoff_datetime, pickup_datetime, SECOND), 0.9) OVER (
+            PARTITION BY pickup_year, pickup_month, pickup_zone, dropoff_zone
+        ) AS trip_duration_p90
+        from {{ ref('dim_fhv_trips') }}
+    WHERE pickup_zone IN ('Newark Airport', 'SoHo', 'Yorkville East')
+        AND pickup_year = 2019
+        AND pickup_month = 11
+
+),
+ranked_trips AS(
+    SELECT *,
+        DENSE_RANK() OVER (PARTITION BY pickup_zone ORDER BY trip_duration_p90 DESC) AS p90_rank
+    FROM trip_durations
+)
+SELECT DISTINCT pickup_zone, dropoff_zone, trip_duration_p90
+FROM ranked_trips
+WHERE p90_rank = 2
+```
+
+The correct answer is **LaGuardia Airport, Chinatown, Garment District**
