@@ -1,110 +1,101 @@
-from pyflink.common import Time
-from pyflink.table import (
-    EnvironmentSettings,
-    TableEnvironment,
-    TableDescriptor,
-    Schema,
-    DataTypes
-)
-from pyflink.table.window import Session
+from pyflink.datastream import StreamExecutionEnvironment
+from pyflink.table import EnvironmentSettings, DataTypes, TableEnvironment, StreamTableEnvironment
+from pyflink.common.watermark_strategy import WatermarkStrategy
+from pyflink.common.time import Duration
 import logging
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_kafka_source_table(t_env):
+def create_events_aggregated_sink(t_env):
+    """Create PostgreSQL sink table"""
+    table_name = 'taxi_sessions'
+    sink_ddl = f"""
+        CREATE TABLE {table_name} (
+            window_start TIMESTAMP(3),
+            window_end TIMESTAMP(3),
+            PULocationID INTEGER,
+            DOLocationID INTEGER,
+            num_trips BIGINT,
+            total_distance DOUBLE,
+            avg_tips DOUBLE
+        ) WITH (
+            'connector' = 'jdbc',
+            'url' = 'jdbc:postgresql://postgres:5432/postgres',
+            'table-name' = '{table_name}',
+            'username' = 'postgres',
+            'password' = 'postgres',
+            'driver' = 'org.postgresql.Driver'
+        )
+    """
+    t_env.execute_sql(sink_ddl)
+    return table_name
+
+def create_events_source_kafka(t_env):
     """Create Kafka source table"""
-    source_ddl = """
-        CREATE TABLE green_trips (
+    table_name = "green_trips"
+    source_ddl = f"""
+        CREATE TABLE {table_name} (
             lpep_pickup_datetime TIMESTAMP(3),
             lpep_dropoff_datetime TIMESTAMP(3),
-            PULocationID INT,
-            DOLocationID INT,
-            passenger_count INT,
+            PULocationID INTEGER,
+            DOLocationID INTEGER,
+            passenger_count INTEGER,
             trip_distance DOUBLE,
             tip_amount DOUBLE,
             WATERMARK FOR lpep_dropoff_datetime AS lpep_dropoff_datetime - INTERVAL '5' SECOND
         ) WITH (
             'connector' = 'kafka',
+            'properties.bootstrap.servers' = 'redpanda-1:29092',
             'topic' = 'green-trips',
-            'properties.bootstrap.servers' = 'redpanda:9092',
-            'properties.group.id' = 'taxi-group',
             'scan.startup.mode' = 'earliest-offset',
-            'format' = 'json',
-            'json.fail-on-missing-field' = 'false',
-            'json.ignore-parse-errors' = 'true'
+            'properties.auto.offset.reset' = 'earliest',
+            'format' = 'json'
         )
     """
     t_env.execute_sql(source_ddl)
+    return table_name
 
-def create_postgres_sink_table(t_env):
-    """Create PostgreSQL sink table"""
-    sink_ddl = """
-        CREATE TABLE taxi_sessions (
-            pu_location INT,
-            do_location INT,
-            session_start TIMESTAMP(3),
-            session_end TIMESTAMP(3),
-            trip_count BIGINT,
-            total_distance DOUBLE,
-            avg_tips DOUBLE,
-            PRIMARY KEY (pu_location, do_location, session_start) NOT ENFORCED
-        ) WITH (
-            'connector' = 'jdbc',
-            'url' = 'jdbc:postgresql://postgres:5432/postgres',
-            'table-name' = 'taxi_sessions',
-            'username' = 'postgres',
-            'password' = 'postgres'
-        )
-    """
-    t_env.execute_sql(sink_ddl)
-
-def create_session_window_query():
-    """Create session window query"""
-    return """
-        INSERT INTO taxi_sessions
-        SELECT 
-            PULocationID as pu_location,
-            DOLocationID as do_location,
-            SESSION_START(lpep_dropoff_datetime, INTERVAL '5' MINUTES) as session_start,
-            SESSION_END(lpep_dropoff_datetime, INTERVAL '5' MINUTES) as session_end,
-            COUNT(*) as trip_count,
-            SUM(trip_distance) as total_distance,
-            AVG(tip_amount) as avg_tips
-        FROM green_trips
-        GROUP BY 
-            PULocationID,
-            DOLocationID,
-            SESSION(lpep_dropoff_datetime, INTERVAL '5' MINUTES)
-    """
-
-def main():
+def log_aggregation():
     try:
-        # Create Table Environment
-        env_settings = EnvironmentSettings.in_streaming_mode()
-        t_env = TableEnvironment.create(env_settings)
-
-        # Set checkpointing interval
-        t_env.get_config().get_configuration().set_string(
-            "execution.checkpointing.interval", "10s"
-        )
+        # Set up the execution environment
+        env = StreamExecutionEnvironment.get_execution_environment()
+        env.enable_checkpointing(10 * 1000)
+        
+        # Set up the table environment
+        settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
+        t_env = StreamTableEnvironment.create(env, environment_settings=settings)
 
         # Create source and sink tables
         logger.info("Creating Kafka source table...")
-        create_kafka_source_table(t_env)
-
+        source_table = create_events_source_kafka(t_env)
+        
         logger.info("Creating PostgreSQL sink table...")
-        create_postgres_sink_table(t_env)
+        sink_table = create_events_aggregated_sink(t_env)
 
         # Execute session window query
         logger.info("Executing session window query...")
-        session_query = create_session_window_query()
-        t_env.execute_sql(session_query)
+        t_env.execute_sql(f"""
+            INSERT INTO {sink_table}
+            SELECT 
+                SESSION_START(lpep_dropoff_datetime, INTERVAL '5' MINUTE) AS window_start,
+                SESSION_END(lpep_dropoff_datetime, INTERVAL '5' MINUTE) AS window_end,
+                PULocationID,
+                DOLocationID,
+                COUNT(*) AS num_trips,
+                SUM(trip_distance) as total_distance,
+                AVG(tip_amount) as avg_tips
+            FROM {source_table}
+            GROUP BY 
+                SESSION(lpep_dropoff_datetime, INTERVAL '5' MINUTE),
+                PULocationID,
+                DOLocationID
+        """).wait()
 
     except Exception as e:
         logger.error(f"Error in Flink job: {str(e)}")
         raise
 
 if __name__ == '__main__':
-    main()
+    log_aggregation()
