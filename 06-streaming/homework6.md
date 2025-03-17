@@ -114,28 +114,18 @@ pip install kafka-python
 You can start a jupyter notebook in your solution folder or
 create a script
 
-Let's try to connect to our server:
+Let's try to connect to our server, please see `kafka_connection_test.py`
 
-```python
-import json
+The output of the 
 
-from kafka import KafkaProducer
-
-def json_serializer(data):
-    return json.dumps(data).encode('utf-8')
-
-server = 'localhost:9092'
-
-producer = KafkaProducer(
-    bootstrap_servers=[server],
-    value_serializer=json_serializer
-)
-
-producer.bootstrap_connected()
+```bash
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=localhost:9092 <connecting> [IPv6 ('::1', 9092, 0, 0)]>: connecting to localhost:9092 [('::1', 9092, 0, 0) IPv6]
+INFO:kafka.conn:Broker version identified as 2.6
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=localhost:9092 <checking_api_versions_recv> [IPv6 ('::1', 9092, 0, 0)]>: Connection complete.
+INFO:__main__:Successfully connected to Kafka!
+Connection status: True
 ```
-
-Provided that you can connect to the server, what's the output
-of the last command?
+Last command is **Connection status: True** 
 
 ## Question 4: Sending the Trip Data
 
@@ -151,35 +141,73 @@ Read the data, and keep only these columns:
 * `'trip_distance',`
 * `'tip_amount'`
 
-Now send all the data using this code:
+Now send all the data using `send_taxi_data.py`
 
-```python
-producer.send(topic_name, value=message)
+The full output
+
+```log
+INFO:__main__:Preparing taxi data...
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=localhost:9092 <connecting> [IPv6 ('::1', 9092, 0, 0)]>: connecting to localhost:9092 [('::1', 9092, 0, 0) IPv6]
+INFO:kafka.conn:Broker version identified as 2.6
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=localhost:9092 <checking_api_versions_recv> [IPv6 ('::1', 9092, 0, 0)]>: Connection complete.
+INFO:__main__:Starting to send 476386 records to Kafka
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=localhost:9092 <connecting> [IPv6 ('::1', 9092, 0, 0)]>: connecting to localhost:9092 [('::1', 9092, 0, 0) IPv6]
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=localhost:9092 <checking_api_versions_send> [IPv6 ('::1', 9092, 0, 0)]>: Connection complete.
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=bootstrap-0 host=localhost:9092 <connected> [IPv6 ('::1', 9092, 0, 0)]>: Closing connection. 
+INFO:__main__:Sent 10000/476386 records
+INFO:__main__:Sent 20000/476386 records
+INFO:__main__:Sent 30000/476386 records
+INFO:__main__:Sent 40000/476386 records
+INFO:__main__:Sent 50000/476386 records
+INFO:__main__:Sent 60000/476386 records
+INFO:__main__:Sent 70000/476386 records
+INFO:__main__:Sent 80000/476386 records
+INFO:__main__:Sent 90000/476386 records
+INFO:__main__:Sent 100000/476386 records
+INFO:__main__:Sent 110000/476386 records
+INFO:__main__:Sent 120000/476386 records
+INFO:__main__:Sent 130000/476386 records
+INFO:__main__:Sent 140000/476386 records
+INFO:__main__:Sent 150000/476386 records
+INFO:__main__:Sent 160000/476386 records
+INFO:__main__:Sent 170000/476386 records
+INFO:__main__:Sent 180000/476386 records
+INFO:__main__:Sent 190000/476386 records
+INFO:__main__:Sent 200000/476386 records
+INFO:__main__:Sent 210000/476386 records
+INFO:__main__:Sent 220000/476386 records
+INFO:__main__:Sent 230000/476386 records
+INFO:__main__:Sent 240000/476386 records
+INFO:__main__:Sent 250000/476386 records
+INFO:__main__:Sent 260000/476386 records
+INFO:__main__:Sent 270000/476386 records
+INFO:__main__:Sent 280000/476386 records
+INFO:__main__:Sent 290000/476386 records
+INFO:__main__:Sent 300000/476386 records
+INFO:__main__:Sent 310000/476386 records
+INFO:__main__:Sent 320000/476386 records
+INFO:__main__:Sent 330000/476386 records
+INFO:__main__:Sent 340000/476386 records
+INFO:__main__:Sent 350000/476386 records
+INFO:__main__:Sent 360000/476386 records
+INFO:__main__:Sent 370000/476386 records
+INFO:__main__:Sent 380000/476386 records
+INFO:__main__:Sent 390000/476386 records
+INFO:__main__:Sent 400000/476386 records
+INFO:__main__:Sent 410000/476386 records
+INFO:__main__:Sent 420000/476386 records
+INFO:__main__:Sent 430000/476386 records
+INFO:__main__:Sent 440000/476386 records
+INFO:__main__:Sent 450000/476386 records
+INFO:__main__:Sent 460000/476386 records
+INFO:__main__:Sent 470000/476386 records
+INFO:__main__:Finished sending 476386 records in 84.16 seconds
+INFO:__main__:Average speed: 5660.38 records/second
+INFO:kafka.conn:<BrokerConnection client_id=kafka-python-producer-1, node_id=1 host=localhost:9092 <connected> [IPv6 ('::1', 9092, 0, 0)]>: Closing connection. 
+Total time taken: 84.16 seconds
 ```
 
-For each row (`message`) in the dataset. In this case, `message`
-is a dictionary.
-
-After sending all the messages, flush the data:
-
-```python
-producer.flush()
-```
-
-Use `from time import time` to see the total time 
-
-```python
-from time import time
-
-t0 = time()
-
-# ... your code
-
-t1 = time()
-took = t1 - t0
-```
-
-How much time did it take to send the entire dataset and flush? 
+It took **84.16 seconds** to send the entire dataset and flush.
 
 
 ## Question 5: Build a Sessionization Window (2 points)
@@ -190,4 +218,43 @@ Now we have the data in the Kafka stream. It's time to process it.
 * Have it read from `green-trips` fixing the schema
 * Use a [session window](https://nightlies.apache.org/flink/flink-docs-master/docs/dev/datastream/operators/windows/) with a gap of 5 minutes
 * Use `lpep_dropoff_datetime` time as your watermark with a 5 second tolerance
-* Which pickup and drop off locations have the longest unbroken streak of taxi trips?
+
+At first we need to add our script to docker container
+
+```bash
+docker cp session_job.py flink-jobmanager:/tmp/session_job.py
+```
+
+Then we should execute this script inside docker container
+
+```bash
+sudo docker exec -it flink-jobmanager flink run -py /tmp/session_job.py
+```
+
+In order to get pickup and drop off locations that have the longest unbroken streak of taxi trips we
+will execute the query
+
+```sql
+with streak_analysis as (
+	select
+		PULocationID,
+		DOLocationID,
+		window_start,
+		window_end,
+		num_trips,
+		EXTRACT(EPOCH from (window_end - window_start)) as session_duration
+	from taxi_sessions
+)
+select
+	PULocationID,
+	DOLocationID,
+	window_start,
+	window_end,
+	num_trips,
+	session_duration / 60 as duration_minutes
+from streak_analysis
+order by session_duration desc
+limit 10;
+```
+
+We got that **74,75** id's are the answer.
