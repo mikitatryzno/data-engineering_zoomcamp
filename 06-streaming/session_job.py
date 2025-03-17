@@ -1,4 +1,3 @@
-# Create a new file: session_job.py
 from pyflink.common import Time
 from pyflink.table import (
     EnvironmentSettings,
