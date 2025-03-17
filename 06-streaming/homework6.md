@@ -63,7 +63,19 @@ For that, check the output of the command `rpk help` _inside the container_. The
 
 Find out what you need to execute based on the `help` output.
 
-What's the version, based on the output of the command you executed? (copy the entire version)
+## Solution
+
+To get inside the container we need to execute
+
+```bash
+docker exec -it redpanda-1 bash
+```
+then we execute
+
+```bash
+rpk version
+```
+The output is **v24.2.18**
 
 
 ## Question 2. Creating a topic
@@ -75,7 +87,16 @@ redpandas.
 
 Read the output of `help` and based on it, create a topic with name `green-trips` 
 
-What's the output of the command for creating a topic? Include the entire output in your answer.
+## Solution
+
+In redpanda container we need to execute
+
+```bash
+rpk topic create green-trips
+```
+The output is 
+TOPIC        STATUS
+green-trips  OK
 
 
 ## Question 3. Connecting to the Kafka server
