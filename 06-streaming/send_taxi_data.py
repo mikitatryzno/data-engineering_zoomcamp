@@ -1,10 +1,8 @@
-# Create a new file: send_taxi_data.py
 import pandas as pd
 from time import time
 import json
 from kafka import KafkaProducer
 import logging
-from datetime import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -13,7 +11,6 @@ logger = logging.getLogger(__name__)
 def prepare_taxi_data(file_path):
     """Read and prepare taxi data"""
     try:
-        # Read the parquet file
         columns_to_keep = [
             'lpep_pickup_datetime',
             'lpep_dropoff_datetime',
@@ -39,7 +36,6 @@ def prepare_taxi_data(file_path):
 def send_to_kafka(df):
     """Send data to Kafka topic"""
     try:
-        # Create Kafka producer
         producer = KafkaProducer(
             bootstrap_servers=['localhost:9092'],
             value_serializer=lambda x: json.dumps(x).encode('utf-8'),
