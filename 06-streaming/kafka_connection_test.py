@@ -1,4 +1,3 @@
-# Create a new file: kafka_connection_test.py
 import json
 from kafka import KafkaProducer
 import logging
@@ -20,7 +19,6 @@ def create_kafka_producer():
         producer = KafkaProducer(
             bootstrap_servers=[server],
             value_serializer=json_serializer,
-            # Add additional configurations for reliability
             retries=5,
             acks='all'
         )
